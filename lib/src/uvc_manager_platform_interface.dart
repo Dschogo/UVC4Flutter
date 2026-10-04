@@ -15,7 +15,7 @@
 import 'dart:ui';
 
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'package:uvc_manager/uvc_manager.dart';
+import 'package:uvc_stream/uvc_stream.dart';
 
 abstract class UVCControllerInterface {
   int get deviceId => throw UnimplementedError('deviceId has not been implemented.');

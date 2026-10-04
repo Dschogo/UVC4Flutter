@@ -1,6 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-group = "com.serenegiant.uvc_manager"
+group = "com.serenegiant.uvc_stream"
 version = "1.0-SNAPSHOT"
 
 buildscript {
@@ -12,6 +12,7 @@ buildscript {
 
     dependencies {
         classpath("com.android.tools.build:gradle:9.2.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10")
     }
 }
 
@@ -24,12 +25,14 @@ allprojects {
 }
 
 apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
 
 android {
-    namespace = "com.serenegiant.uvc_manager"
+    namespace = "com.serenegiant.uvc_stream"
 
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // StreamPack 3.2.1 requires compiling against API 37 or later.
+    compileSdk = 37
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -42,7 +45,7 @@ android {
     }
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 26
 
         externalNativeBuild {
             cmake {
@@ -74,6 +77,13 @@ android {
         implementation "androidx.core:core-ktx:1.18.0"
         implementation "androidx.appcompat:appcompat:1.7.1"
         implementation("com.serenegiant:common:10.3.1")
+
+        // StreamPack (Maven Central, no patches). Version is pinned here.
+        implementation "io.github.thibaultbee.streampack:streampack-core:3.2.1"
+        implementation "io.github.thibaultbee.streampack:streampack-rtmp:3.2.1"
+        implementation "io.github.thibaultbee.streampack:streampack-srt:3.2.1"
+
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
     }
 
     testOptions {

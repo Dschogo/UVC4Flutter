@@ -23,6 +23,9 @@
 #include <memory>
 #include <unordered_map>
 #include <jni.h>
+#include <android/native_window.h>
+
+#include "flutter_uvc_fanout.h"
 
 //--------------------------------------------------------------------------------
 // 外部クラスの前方宣言
@@ -51,6 +54,11 @@ private:
 	 * UVC機器のidとUVCHolderSpのペアを保持
 	 */
 	std::unordered_map <int32_t, std::shared_ptr<FlutterUVCHolder>> uvc_holders;
+	/**
+	 * セッションレベルのGLファンアウト(機器が取り外されても維持される)
+	 */
+	FlutterUVCFanoutSp m_fanout;
+	FlutterUVCFanoutSp ensure_fanout(const int32_t &device_id);
 
 	/**
 	 * 使用中のＵＶＣ機器があれば終了させる
@@ -247,6 +255,21 @@ public:
 	 * @return
 	 */
 	int get_uac_frame(const int32_t &device_id, uint8_t *data, uint32_t *data_len, int64_t *pts_us);
+	//--------------------------------------------------------------------------------
+	/**
+	 * GLファンアウト(プレビュー+エンコード同時出力)関連
+	 */
+	int32_t start_fanout(const int32_t &device_id);
+	int32_t stop_fanout(const int32_t &device_id);
+	int32_t set_fanout_preview(const int32_t &device_id, ANativeWindow *window);
+	int32_t set_fanout_encode(const int32_t &device_id, ANativeWindow *window);
+	int32_t set_fanout_encode_active(const int32_t &device_id, const bool &active);
+	int32_t set_fanout_mvp(const int32_t &device_id, const float *mvp_matrix);
+	/**
+	 * UAC音声をコールバックではなくネイティブ側で読み取るための開始/読み取り
+	 */
+	int32_t start_uac_read(const int32_t &device_id);
+	int read_uac_frame(const int32_t &device_id, uint8_t *data, uint32_t *data_len, int64_t *pts_us);
 };
 
 using FlutterPluginJavaSp = std::shared_ptr<FlutterPluginJava>;

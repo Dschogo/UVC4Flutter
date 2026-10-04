@@ -35,6 +35,7 @@
 // android
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
+#include <cstring>
 // dart
 #include "../dartAPIDL/dart_api_dl.h"
 // aandusb
@@ -46,7 +47,7 @@
 #include "flutter_plugin_java.h"
 
 // Java側オブジェクトのFQCN
-#define FQCN_JAVA_PLUGIN "com/serenegiant/flutter/uvcplugin/UVCManager"
+#define FQCN_JAVA_PLUGIN "com/serenegiant/uvc_stream/UvcStreamPlugin"
 
 namespace plugin = serenegiant::flutter;
 namespace sere = serenegiant;
@@ -441,6 +442,154 @@ static int nativeSetSurface(JNIEnv *env, jobject,
 	RETURN(result, int);
 }
 
+static int nativeSetVideoSize(
+	JNIEnv *, jobject, jint deviceId, jint frameType, jint width, jint height) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		result = pluginJava->set_video_size(
+			deviceId, (uvc_raw_frame_t) frameType, width, height);
+	}
+
+	RETURN(result, int);
+}
+
+static int nativeFanoutStart(JNIEnv *, jobject, jint deviceId) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		result = pluginJava->start_fanout(deviceId);
+	}
+
+	RETURN(result, int);
+}
+
+static int nativeFanoutStop(JNIEnv *, jobject, jint deviceId) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		result = pluginJava->stop_fanout(deviceId);
+	}
+
+	RETURN(result, int);
+}
+
+static int nativeFanoutSetPreview(JNIEnv *env, jobject, jint deviceId, jobject jsurface) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		if (jsurface) {
+			auto *window = ANativeWindow_fromSurface(env, jsurface);
+			result = pluginJava->set_fanout_preview(deviceId, window);
+			if (window) {
+				ANativeWindow_release(window);
+			}
+		} else {
+			result = pluginJava->set_fanout_preview(deviceId, nullptr);
+		}
+	}
+
+	RETURN(result, int);
+}
+
+static int nativeFanoutSetEncode(JNIEnv *env, jobject, jint deviceId, jobject jsurface) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		if (jsurface) {
+			auto *window = ANativeWindow_fromSurface(env, jsurface);
+			result = pluginJava->set_fanout_encode(deviceId, window);
+			if (window) {
+				ANativeWindow_release(window);
+			}
+		} else {
+			result = pluginJava->set_fanout_encode(deviceId, nullptr);
+		}
+	}
+
+	RETURN(result, int);
+}
+
+static int nativeFanoutSetEncodeActive(
+	JNIEnv *, jobject, jint deviceId, jboolean active) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		result = pluginJava->set_fanout_encode_active(deviceId, active == JNI_TRUE);
+	}
+
+	RETURN(result, int);
+}
+
+static int nativeFanoutSetMvp(JNIEnv *env, jobject, jint deviceId, jfloatArray mvp) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		float matrix[16];
+		if (mvp && (env->GetArrayLength(mvp) >= 16)) {
+			env->GetFloatArrayRegion(mvp, 0, 16, matrix);
+		} else {
+			memset(matrix, 0, sizeof(matrix));
+			matrix[0] = matrix[5] = matrix[10] = matrix[15] = 1.0f;
+		}
+		result = pluginJava->set_fanout_mvp(deviceId, matrix);
+	}
+
+	RETURN(result, int);
+}
+
+static int nativeStartUacRead(JNIEnv *, jobject, jint deviceId) {
+	ENTER();
+
+	int32_t result = -5;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		result = pluginJava->start_uac_read(deviceId);
+	}
+
+	RETURN(result, int);
+}
+
+static jlong nativeReadUacFrame(
+	JNIEnv *env, jobject, jint deviceId, jobject buffer, jintArray outLen) {
+//	ENTER();
+
+	int64_t result = -4;
+	std::lock_guard<std::mutex> lock(plugin_lock);
+	if (pluginJava) {
+		auto *data = buffer
+			? reinterpret_cast<uint8_t *>(env->GetDirectBufferAddress(buffer))
+			: nullptr;
+		const auto capacity = buffer
+			? static_cast<uint32_t>(env->GetDirectBufferCapacity(buffer))
+			: 0;
+		uint32_t data_len = capacity;
+		int64_t pts_us = 0;
+		const int r = pluginJava->read_uac_frame(deviceId, data, &data_len, &pts_us);
+		if (outLen && (env->GetArrayLength(outLen) >= 1)) {
+			const jint len = static_cast<jint>(data_len);
+			env->SetIntArrayRegion(outLen, 0, 1, &len);
+		}
+		result = (r == 0) ? pts_us : r;
+	}
+
+	return result;
+}
+
 static int nativeRelease(JNIEnv *, jobject) {
 	ENTER();
 
@@ -463,6 +612,17 @@ static JNINativeMethod methods[] = {
 	{ "nativeRelease",	"()I", (void *) nativeRelease },
 
 	{ "nativeSetSurface",	"(IJLandroid/view/Surface;)I", (void *) nativeSetSurface },
+
+	{ "nativeSetVideoSize",	"(IIII)I", (void *) nativeSetVideoSize },
+	{ "nativeFanoutStart",	"(I)I", (void *) nativeFanoutStart },
+	{ "nativeFanoutStop",	"(I)I", (void *) nativeFanoutStop },
+	{ "nativeFanoutSetPreview",	"(ILandroid/view/Surface;)I", (void *) nativeFanoutSetPreview },
+	{ "nativeFanoutSetEncode",	"(ILandroid/view/Surface;)I", (void *) nativeFanoutSetEncode },
+	{ "nativeFanoutSetEncodeActive",	"(IZ)I", (void *) nativeFanoutSetEncodeActive },
+	{ "nativeFanoutSetMvp",	"(I[F)I", (void *) nativeFanoutSetMvp },
+
+	{ "nativeStartUacRead",	"(I)I", (void *) nativeStartUacRead },
+	{ "nativeReadUacFrame",	"(ILjava/nio/ByteBuffer;[I)J", (void *) nativeReadUacFrame },
 };
 
 

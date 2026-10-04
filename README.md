@@ -1,4 +1,13 @@
-# UVC4FlutterAndroid(uvc_manager)
+# uvc_stream (fork of UVC4FlutterAndroid)
+
+This package is a fork of
+[UVC4Flutter](https://github.com/saki4510t/UVC4Flutter) renamed to `uvc_stream`
+and extended with native GL fan-out preview and SRT/RTMP live streaming through
+[StreamPack](https://github.com/ThibaultBee/StreamPack). The upstream device
+control API (`UVCManager`, `UVCController`, `UVCVideoView`, ...) is preserved;
+the streaming API is documented in the repository root `README.md` and exposed
+by `StreamSession`.
+
 -----
 
 A Flutter plugin to access UVC device(s) on Android devices.

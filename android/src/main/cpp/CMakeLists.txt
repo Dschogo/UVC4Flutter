@@ -95,6 +95,7 @@ add_library(flutter-uvc-plugin_objlib OBJECT
     _onload.cpp
     flutter_uac_holder.cpp
     flutter_uvc_holder.cpp
+    flutter_uvc_fanout.cpp
     flutter_plugin_java.cpp
     flutter_plugin_main.cpp     # Flutter/Dart側から呼び出されるC関数
     flutter_utils.cpp

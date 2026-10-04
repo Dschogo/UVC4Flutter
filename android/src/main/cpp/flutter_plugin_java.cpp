@@ -72,6 +72,11 @@ FlutterPluginJava::~FlutterPluginJava() noexcept {
 
 	terminate_all();
 
+	if (m_fanout) {
+		m_fanout->stop();
+		m_fanout.reset();
+	}
+
 	if (m_manager) {
 		manager_release(m_manager);
 		m_manager = nullptr;
@@ -185,6 +190,12 @@ int FlutterPluginJava::add(const int32_t &device_id) {
 		auto holder = get_uvc_holder_locked(device_id, true);
 		if (holder) {
 			get_uac_holder_locked(device_id, true);
+			// Re-point the existing (session level) fan-out to the new device so
+			// the stream resumes without a restart. The fan-out keeps the last
+			// requested capture format/size and applies it to the new device.
+			if (m_fanout) {
+				m_fanout->set_device(m_manager, device_id);
+			}
 			result = 0;
 		}
 	}
@@ -216,6 +227,10 @@ void FlutterPluginJava::remove(const int32_t &device_id) {
 		if (uac_iter != uac_holders.end()) {
 			uac_removed = uac_iter->second;
 			uac_holders.erase(device_id);
+		}
+		// Keep the fan-out alive (drawing black) so the stream does not die.
+		if (m_fanout && (m_fanout->device_id() == device_id)) {
+			m_fanout->set_device(m_manager, -1);
 		}
 	}
 	if (uvc_removed) {
@@ -348,6 +363,11 @@ int32_t FlutterPluginJava::set_video_size(const int32_t &device_id,
 		FlutterUVCHolderSp holder = iter->second;
 		if (holder) {
 			result = holder->set_video_size(frame_type, width, height);
+			// Remember the requested capture format for device hot-swap.
+			if (m_fanout) {
+				m_fanout->set_output_size(
+					static_cast<uint32_t>(frame_type), width, height);
+			}
 		} else {
 			LOGW("Failed to get UVCHolder");
 		}
@@ -703,6 +723,113 @@ int FlutterPluginJava::get_uac_frame(const int32_t &device_id, uint8_t *data, ui
 	}
 
 	return result; // RETURN(result, int);
+}
+
+//--------------------------------------------------------------------------------
+FlutterUVCFanoutSp FlutterPluginJava::ensure_fanout(const int32_t &device_id) {
+	std::lock_guard<std::mutex> lock(m_lock);
+	auto holder = get_uvc_holder_locked(device_id, false);
+	if (!holder) {
+		LOGW("failed to get UVCHolder");
+		return nullptr;
+	}
+	if (!m_fanout) {
+		m_fanout = std::make_shared<FlutterUVCFanout>(
+			m_manager, device_id, holder->frame_type(), holder->width(), holder->height());
+	} else {
+		m_fanout->set_output_size(holder->frame_type(), holder->width(), holder->height());
+		m_fanout->set_device(m_manager, device_id);
+	}
+	return m_fanout;
+}
+
+int32_t FlutterPluginJava::start_fanout(const int32_t &device_id) {
+	ENTER();
+	auto fanout = ensure_fanout(device_id);
+	RETURN(fanout ? fanout->start() : -1, int32_t);
+}
+
+int32_t FlutterPluginJava::stop_fanout(const int32_t &device_id) {
+	ENTER();
+	FlutterUVCFanoutSp fanout;
+	{
+		std::lock_guard<std::mutex> lock(m_lock);
+		fanout = m_fanout;
+	}
+	RETURN(fanout ? fanout->stop() : 0, int32_t);
+}
+
+int32_t FlutterPluginJava::set_fanout_preview(const int32_t &device_id, ANativeWindow *window) {
+	ENTER();
+	auto fanout = ensure_fanout(device_id);
+	RETURN(fanout ? fanout->set_preview_window(window) : -1, int32_t);
+}
+
+int32_t FlutterPluginJava::set_fanout_encode(const int32_t &device_id, ANativeWindow *window) {
+	ENTER();
+	auto fanout = ensure_fanout(device_id);
+	RETURN(fanout ? fanout->set_encode_window(window) : -1, int32_t);
+}
+
+int32_t FlutterPluginJava::set_fanout_encode_active(
+	const int32_t &device_id, const bool &active) {
+	ENTER();
+	FlutterUVCFanoutSp fanout;
+	{
+		std::lock_guard<std::mutex> lock(m_lock);
+		fanout = m_fanout;
+	}
+	RETURN(fanout ? fanout->set_encode_active(active) : -1, int32_t);
+}
+
+int32_t FlutterPluginJava::set_fanout_mvp(const int32_t &device_id, const float *mvp_matrix) {
+	ENTER();
+	FlutterUVCFanoutSp fanout;
+	{
+		std::lock_guard<std::mutex> lock(m_lock);
+		fanout = m_fanout;
+	}
+	RETURN(fanout ? fanout->set_mvp_matrix(mvp_matrix) : -1, int32_t);
+}
+
+int32_t FlutterPluginJava::start_uac_read(const int32_t &device_id) {
+	ENTER();
+
+	int32_t result = -1;
+	FlutterUACHolderSp holder = nullptr;
+	if (m_lock.try_lock()) {
+		holder = get_uac_holder_locked(device_id, false);
+		m_lock.unlock();
+	}
+	if (holder && !holder->is_running()) {
+		result = holder->start(0);
+	}
+	if (holder && (result == -1)) {
+		result = 0;
+	}
+
+	RETURN(result, int32_t);
+}
+
+int FlutterPluginJava::read_uac_frame(
+	const int32_t &device_id, uint8_t *data, uint32_t *data_len, int64_t *pts_us) {
+//	ENTER();
+
+	int result = -4;
+	if (LIKELY(device_id)) {
+		FlutterUACHolderSp holder = nullptr;
+		if (m_lock.try_lock()) {
+			holder = get_uac_holder_locked(device_id, false);
+			m_lock.unlock();
+		}
+		if (holder) {
+			result = holder->get_uac_frame(data, data_len, pts_us);
+		} else {
+			LOGD("FlutterUACHolder not found! id=%d", device_id);
+		}
+	}
+
+	return result;
 }
 
 /**

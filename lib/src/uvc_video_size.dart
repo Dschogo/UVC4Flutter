@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-import 'package:uvc_manager/uvc_manager.dart';
+import 'package:uvc_stream/uvc_stream.dart';
 
 /// 解像度設定
 class VideoSize {

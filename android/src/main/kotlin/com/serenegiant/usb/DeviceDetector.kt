@@ -23,7 +23,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.annotation.Keep
 import androidx.annotation.XmlRes
-import com.serenegiant.uvc_manager.R
+import com.serenegiant.uvc_stream.R
 import java.util.concurrent.CopyOnWriteArraySet
 
 /**

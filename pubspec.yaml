@@ -1,7 +1,7 @@
-name: uvc_manager
-description: "UVC4FlutterAndroid"
-version: 1.2.0
-homepage: https://www.serenegiant.com/
+name: uvc_stream
+description: "USB UVC camera plugin with native GL fan-out and SRT/RTMP streaming (StreamPack)."
+version: 0.1.0
+homepage: https://github.com/serenegiant/UVC4Flutter
 
 environment:
   sdk: ^3.8.0
@@ -39,8 +39,8 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.serenegiant.flutter.uvcplugin
-        pluginClass: UVCManager
+        package: com.serenegiant.uvc_stream
+        pluginClass: UvcStreamPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

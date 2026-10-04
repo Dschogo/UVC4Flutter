@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-import 'package:uvc_manager/uvc_manager.dart';
+import 'package:uvc_stream/uvc_stream.dart';
 
 /// UVC機器から取得したUVC機器コントロールの設定値を保持する
 class ControlInfo {
