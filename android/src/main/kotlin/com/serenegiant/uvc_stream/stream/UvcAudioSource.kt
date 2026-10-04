@@ -109,6 +109,7 @@ class UvcAudioSource(
                 val copied = minOf(length, buffer.remaining())
                 chunk.position(0)
                 chunk.limit(copied)
+                applyGain(chunk, copied, gain)
                 updateLevel(chunk, copied)
                 buffer.put(chunk)
                 if (copied < length) {
@@ -157,7 +158,24 @@ class UvcAudioSource(
         }
     }
 
-    /** Updates [currentLevel] with the RMS of 16-bit little-endian PCM. */
+    /** Scales 16-bit little-endian PCM in place by [gain]. */
+    private fun applyGain(buffer: ByteBuffer, length: Int, gain: Float) {
+        if (gain == 1f) {
+            return
+        }
+        var i = 0
+        while (i + 1 < length) {
+            val lo = buffer.get(i).toInt() and 0xFF
+            val hi = buffer.get(i + 1).toInt()
+            val sample = ((hi shl 8) or lo).toShort().toInt()
+            val scaled = (sample * gain).toInt().coerceIn(-32768, 32767)
+            buffer.put(i, (scaled and 0xFF).toByte())
+            buffer.put(i + 1, ((scaled shr 8) and 0xFF).toByte())
+            i += 2
+        }
+    }
+
+    /** Updates the process-wide VU level from 16-bit little-endian PCM. */
     private fun updateLevel(buffer: ByteBuffer, length: Int) {
         if (length < 2) {
             return
@@ -171,8 +189,8 @@ class UvcAudioSource(
             sum += sample.toDouble() * sample
             i += 2
         }
-        val rms = kotlin.math.sqrt(sum / (length / 2))
-        currentLevel = (rms / 32768.0).toFloat().coerceIn(0f, 1f)
+        val rms = kotlin.math.sqrt(sum / (length / 2)).toFloat()
+        setCurrentLevelFromRms(rms / 32768f)
     }
 
     class Factory(
@@ -196,9 +214,32 @@ class UvcAudioSource(
         // drops (broken HEVC references). Pad with silence instead.
         private const val READ_TIMEOUT_MS = 100
 
-        /** Latest audio RMS level in 0..1 (VU meter), process-wide. */
+        /** Latest audio level in 0..1 (VU meter), process-wide. */
         @Volatile
-        var currentLevel: Float = 0f
-            private set
+        private var _level = 0f
+
+        val currentLevel: Float
+            get() = _level
+
+        /**
+         * Sets the VU level from a 0..1 linear RMS, mapped to a perceptual
+         * 0..1 scale (dBFS over -60..0 dB) so normal speech uses the full bar.
+         */
+        fun setCurrentLevelFromRms(rms: Float) {
+            val db = if (rms > 1e-5f) {
+                20f * kotlin.math.log10(rms.toDouble()).toFloat()
+            } else {
+                -60f
+            }
+            _level = ((db + 60f) / 60f).coerceIn(0f, 1f)
+        }
+
+        fun clearLevel() {
+            _level = 0f
+        }
+
+        /** Output gain multiplier (0..2), process-wide. */
+        @Volatile
+        var gain: Float = 1f
     }
 }

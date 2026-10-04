@@ -255,6 +255,12 @@ class UvcStreamPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, NativeU
                 result.success(UvcAudioSource.currentLevel.toDouble())
             }
 
+            "stream.setAudioGain" -> {
+                val gain: Double = call.argument<Number>("gain")?.toDouble() ?: 1.0
+                UvcAudioSource.gain = gain.toFloat().coerceIn(0f, 2f)
+                result.success(null)
+            }
+
             "stream.start" -> launchAsync(result) { mSession?.start() }
 
             "stream.stop" -> launchAsync(result) { mSession?.stop() }

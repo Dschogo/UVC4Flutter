@@ -145,6 +145,9 @@ class StreamSession {
   /// Current audio RMS level in 0..1 (for a VU meter).
   Future<double> audioLevel() => _channel.getAudioLevel();
 
+  /// Sets the output gain multiplier (0..2).
+  Future<void> setAudioGain(double gain) => _channel.setAudioGain(gain);
+
   /// Starts the native preview fan-out (also started automatically by
   /// [createPreviewTexture]).
   Future<void> startPreview() async {

@@ -92,6 +92,12 @@ class StreamChannel {
   Future<double> getAudioLevel() async =>
       await _channel.invokeMethod<double>('stream.getAudioLevel') ?? 0.0;
 
+  /// Output gain multiplier (0..2).
+  Future<void> setAudioGain(double gain) =>
+      _channel.invokeMethod('stream.setAudioGain', <String, Object?>{
+        'gain': gain,
+      });
+
   Future<Map<Object?, Object?>?> getStats() =>
       _channel.invokeMethod<Map<Object?, Object?>>('stream.getStats');
 

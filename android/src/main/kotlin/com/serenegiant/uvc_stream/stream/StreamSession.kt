@@ -39,6 +39,7 @@ class StreamSession(
     private var streamer: SingleStreamer? = null
     private var selector: AudioSourceSelector? = null
     private val systemStats = SystemStatsCollector(context)
+    private val audioLevelEffect = AudioLevelEffect()
 
     private val videoSettings = mutableMapOf<String, Any?>()
     private val audioSettings = mutableMapOf<String, Any?>()
@@ -137,6 +138,15 @@ class StreamSession(
             }
             streamer.setAudioSource(selector.factory())
             selector.acquire()
+            // Feed the VU meter for any audio source (UVC, phone mic, BT).
+            try {
+                val processor = streamer.audioInput.processor
+                if (!processor.contains(audioLevelEffect)) {
+                    processor.add(audioLevelEffect)
+                }
+            } catch (_: Throwable) {
+                // Audio input not ready; the VU meter stays at zero.
+            }
         }
 
         streamer.bitrateRegulatorControllerFactory = regulator()
