@@ -135,6 +135,11 @@ class UvcAudioSource(
             val silence = ByteArray(buffer.remaining())
             buffer.put(silence)
         }
+        // StreamPack reads a queued frame as offset=position(), size=limit()
+        // (MediaCodecEncoder.queueInputFrame), so leave the buffer flipped:
+        // offset 0, length = bytes written. Without this, position==limit==capacity
+        // and MediaCodec throws "buffer offset and size goes beyond the capacity".
+        buffer.flip()
         return if (lastTimestamp > 0) lastTimestamp else TimeUtils.currentTime()
     }
 
