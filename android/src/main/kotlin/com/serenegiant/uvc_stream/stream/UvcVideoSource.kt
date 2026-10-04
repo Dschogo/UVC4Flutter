@@ -53,7 +53,10 @@ class UvcVideoSource(
     override val infoProviderFlow: StateFlow<ISourceInfoProvider> =
         _infoProviderFlow.asStateFlow()
 
-    override val timebase: Timebase = Timebase.REALTIME
+    // The native fan-out stamps frames with the UVC presentation timestamp, which
+    // is based on System.nanoTime() (uptime). Declaring REALTIME made StreamPack
+    // log "System time diverged, detected timebase UPTIME ..." and mishandle PTS.
+    override val timebase: Timebase = Timebase.UPTIME
 
     private var output: Surface? = null
 

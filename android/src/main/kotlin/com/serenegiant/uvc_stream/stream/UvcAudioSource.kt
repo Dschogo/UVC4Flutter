@@ -51,6 +51,13 @@ class UvcAudioSource(
     @Volatile
     private var scratch: ByteBuffer = ByteBuffer.allocateDirect(DEFAULT_MIN_BUFFER_SIZE)
 
+    // PCM bytes that did not fit the destination buffer and are carried over to
+    // the next call. The native read reports its whole capacity, so a single UAC
+    // frame can be larger than the encoder input buffer.
+    private var pendingData = ByteArray(0)
+    private var pendingOffset = 0
+    private var lastTimestamp = 0L
+
     override suspend fun configure(config: AudioSourceConfig) {
         val channels = when (config.channelConfig) {
             AudioFormat.CHANNEL_IN_MONO -> 1
@@ -80,24 +87,36 @@ class UvcAudioSource(
     }
 
     override fun fillAudioFrame(buffer: ByteBuffer): Long {
-        var lastTimestamp = -1L
+        // Serve PCM carried over from the previous call first.
+        drainPending(buffer)
+
         var waitedMs = 0
         val outLen = IntArray(1)
 
         while (buffer.remaining() > 0) {
             val chunk = scratch
             chunk.clear()
-            val capacity = minOf(chunk.capacity(), buffer.remaining())
-            chunk.limit(capacity)
             outLen[0] = 0
             val pts = bridge.readUacFrame(deviceId, chunk, outLen)
-            val length = outLen[0]
+            // The native side reads into its whole capacity (GetDirectBufferCapacity
+            // ignores the Java limit) and reports that length. Clamp defensively and
+            // buffer the remainder so we never overflow the destination ByteBuffer.
+            val length = outLen[0].coerceIn(0, chunk.capacity())
             if (length > 0) {
-                chunk.position(0)
-                chunk.limit(length)
-                buffer.put(chunk)
                 if (pts > 0) {
                     lastTimestamp = pts
+                }
+                val copied = minOf(length, buffer.remaining())
+                chunk.position(0)
+                chunk.limit(copied)
+                buffer.put(chunk)
+                if (copied < length) {
+                    chunk.limit(length)
+                    chunk.position(copied)
+                    val rest = ByteArray(length - copied)
+                    chunk.get(rest)
+                    pendingData = rest
+                    pendingOffset = 0
                 }
                 waitedMs = 0
             } else {
@@ -117,6 +136,19 @@ class UvcAudioSource(
             buffer.put(silence)
         }
         return if (lastTimestamp > 0) lastTimestamp else TimeUtils.currentTime()
+    }
+
+    private fun drainPending(buffer: ByteBuffer) {
+        if (pendingOffset >= pendingData.size) {
+            return
+        }
+        val count = minOf(pendingData.size - pendingOffset, buffer.remaining())
+        buffer.put(pendingData, pendingOffset, count)
+        pendingOffset += count
+        if (pendingOffset >= pendingData.size) {
+            pendingData = ByteArray(0)
+            pendingOffset = 0
+        }
     }
 
     class Factory(
