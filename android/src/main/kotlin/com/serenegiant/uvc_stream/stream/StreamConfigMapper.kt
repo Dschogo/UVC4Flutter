@@ -42,6 +42,8 @@ import io.github.thibaultbee.streampack.ext.srt.regulator.controllers.intervalSr
  */
 object StreamConfigMapper {
 
+    private const val DEFAULT_SRT_LATENCY_MS = 200
+
     fun videoMimeType(codec: String?): String {
         if (codec.isNullOrBlank()) return MediaFormat.MIMETYPE_VIDEO_AVC
         if (codec.startsWith("video/")) return codec
@@ -124,8 +126,24 @@ object StreamConfigMapper {
     fun descriptor(protocol: String?, url: String): MediaDescriptor =
         when (protocol?.lowercase()) {
             "rtmp", "rtmps" -> RtmpMediaDescriptor(url.toUri())
-            else -> SrtMediaDescriptor(url)
+            else -> srtDescriptor(url)
         }
+
+    /**
+     * SRT needs some latency headroom: with the library default (~120 ms) a
+     * bitrate spike (e.g. an IDR after the picture changes) overflows the
+     * receiver buffer, which drops packets and breaks HEVC references. Apply a
+     * modest default latency unless the user already set one in the URL.
+     */
+    private fun srtDescriptor(url: String): SrtMediaDescriptor {
+        val hasLatency = url.toUri().queryParameterNames.any { it.equals("latency", true) }
+        val resolved = if (hasLatency) {
+            url
+        } else {
+            "$url${if (url.contains('?')) '&' else '?'}latency=$DEFAULT_SRT_LATENCY_MS"
+        }
+        return SrtMediaDescriptor(resolved)
+    }
 
     fun regulator(
         type: String?,

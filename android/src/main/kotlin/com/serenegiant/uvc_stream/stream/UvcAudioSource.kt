@@ -171,6 +171,10 @@ class UvcAudioSource(
         private const val DEFAULT_MIN_BUFFER_SIZE = 4096
         private const val MIN_BUFFER_SIZE = 1024
         private const val READ_RETRY_MS = 2
-        private const val READ_TIMEOUT_MS = 500
+
+        // Never block the encoder input callback for long: a stalled audio read
+        // delays the muxer and makes the SRT sender burst, which the receiver
+        // drops (broken HEVC references). Pad with silence instead.
+        private const val READ_TIMEOUT_MS = 100
     }
 }
