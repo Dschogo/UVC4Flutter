@@ -28,6 +28,7 @@ import androidx.core.util.forEach
 import com.serenegiant.uvc_stream.stream.AudioSourceType
 import com.serenegiant.uvc_stream.stream.NativeUvcBridge
 import com.serenegiant.uvc_stream.stream.StreamSession
+import com.serenegiant.uvc_stream.stream.UvcAudioSource
 import com.serenegiant.usb.DeviceDetector
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -248,6 +249,10 @@ class UvcStreamPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, NativeU
                 val muted: Boolean = call.argument<Boolean>("muted") ?: false
                 mSession?.setVideoMuted(muted)
                 result.success(null)
+            }
+
+            "stream.getAudioLevel" -> {
+                result.success(UvcAudioSource.currentLevel.toDouble())
             }
 
             "stream.start" -> launchAsync(result) { mSession?.start() }

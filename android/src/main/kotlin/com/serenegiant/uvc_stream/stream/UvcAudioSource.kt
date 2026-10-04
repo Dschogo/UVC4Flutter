@@ -109,6 +109,7 @@ class UvcAudioSource(
                 val copied = minOf(length, buffer.remaining())
                 chunk.position(0)
                 chunk.limit(copied)
+                updateLevel(chunk, copied)
                 buffer.put(chunk)
                 if (copied < length) {
                     chunk.limit(length)
@@ -156,6 +157,24 @@ class UvcAudioSource(
         }
     }
 
+    /** Updates [currentLevel] with the RMS of 16-bit little-endian PCM. */
+    private fun updateLevel(buffer: ByteBuffer, length: Int) {
+        if (length < 2) {
+            return
+        }
+        var sum = 0.0
+        var i = 0
+        while (i + 1 < length) {
+            val lo = buffer.get(i).toInt() and 0xFF
+            val hi = buffer.get(i + 1).toInt()
+            val sample = ((hi shl 8) or lo).toShort().toInt()
+            sum += sample.toDouble() * sample
+            i += 2
+        }
+        val rms = kotlin.math.sqrt(sum / (length / 2))
+        currentLevel = (rms / 32768.0).toFloat().coerceIn(0f, 1f)
+    }
+
     class Factory(
         private val deviceId: Int,
         private val bridge: NativeUvcBridge,
@@ -176,5 +195,10 @@ class UvcAudioSource(
         // delays the muxer and makes the SRT sender burst, which the receiver
         // drops (broken HEVC references). Pad with silence instead.
         private const val READ_TIMEOUT_MS = 100
+
+        /** Latest audio RMS level in 0..1 (VU meter), process-wide. */
+        @Volatile
+        var currentLevel: Float = 0f
+            private set
     }
 }

@@ -88,6 +88,10 @@ class StreamChannel {
         'muted': muted,
       });
 
+  /// Current audio RMS level in 0..1 (for a VU meter).
+  Future<double> getAudioLevel() async =>
+      await _channel.invokeMethod<double>('stream.getAudioLevel') ?? 0.0;
+
   Future<Map<Object?, Object?>?> getStats() =>
       _channel.invokeMethod<Map<Object?, Object?>>('stream.getStats');
 

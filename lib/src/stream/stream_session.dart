@@ -142,6 +142,9 @@ class StreamSession {
   /// Mutes or unmutes the video track (sends black frames).
   Future<void> setVideoMuted(bool muted) => _channel.setVideoMuted(muted);
 
+  /// Current audio RMS level in 0..1 (for a VU meter).
+  Future<double> audioLevel() => _channel.getAudioLevel();
+
   /// Starts the native preview fan-out (also started automatically by
   /// [createPreviewTexture]).
   Future<void> startPreview() async {
